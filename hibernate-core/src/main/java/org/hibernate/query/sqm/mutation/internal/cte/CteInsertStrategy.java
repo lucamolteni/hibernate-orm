@@ -14,6 +14,7 @@ import org.hibernate.persister.entity.EntityPersister;
 import org.hibernate.query.spi.DomainQueryExecutionContext;
 import org.hibernate.query.sqm.internal.DomainParameterXref;
 import org.hibernate.query.sqm.mutation.spi.SqmMultiTableInsertStrategy;
+import org.hibernate.query.sqm.tree.from.SqmRoot;
 import org.hibernate.query.sqm.tree.insert.SqmInsertStatement;
 import org.hibernate.sql.ast.tree.cte.CteTable;
 
@@ -94,9 +95,15 @@ import org.hibernate.sql.ast.tree.cte.CteTable;
 public class CteInsertStrategy implements SqmMultiTableInsertStrategy {
 	public static final String SHORT_NAME = "cte";
 
-	private final EntityPersister rootDescriptor;
-	private final SessionFactoryImplementor sessionFactory;
-	private final CteTable entityCteTable;
+	private EntityPersister rootDescriptor;
+	private SessionFactoryImplementor sessionFactory;
+	private CteTable entityCteTable;
+	private Dialect dialect;
+
+	public CteInsertStrategy(Dialect dialect) {
+		this.dialect = dialect;
+		validateDialect( dialect );
+	}
 
 	public CteInsertStrategy(
 			EntityMappingType rootEntityType,
@@ -111,21 +118,28 @@ public class CteInsertStrategy implements SqmMultiTableInsertStrategy {
 		this.sessionFactory = runtimeModelCreationContext.getSessionFactory();
 
 		final Dialect dialect = runtimeModelCreationContext.getDialect();
+		validateDialect( dialect );
 
+		this.entityCteTable = createCteTable( rootDescriptor, dialect );
+	}
+
+	private void validateDialect(Dialect dialect) {
 		if ( !dialect.supportsNonQueryWithCTE() ) {
 			throw new UnsupportedOperationException(
 					getClass().getSimpleName() +
-							" can only be used with Dialects that support CTE that can take UPDATE or DELETE statements as well"
+					" can only be used with Dialects that support CTE that can take UPDATE or DELETE statements as well"
 			);
 		}
 
 		if ( !dialect.supportsValuesList() ) {
 			throw new UnsupportedOperationException(
 					getClass().getSimpleName() +
-							" can only be used with Dialects that support VALUES lists"
+					" can only be used with Dialects that support VALUES lists"
 			);
 		}
+	}
 
+	private static CteTable createCteTable(EntityPersister rootDescriptor, Dialect dialect) {
 		// The table name might be a sub-query, which is inappropriate for a temporary table name
 		final String originalTableName = rootDescriptor.getEntityPersister().getSynchronizedQuerySpaces()[0];
 		final String name;
@@ -142,7 +156,7 @@ public class CteInsertStrategy implements SqmMultiTableInsertStrategy {
 		else {
 			qualifiedTableName = name;
 		}
-		this.entityCteTable = CteTable.createEntityTable( qualifiedTableName, rootDescriptor );
+		return CteTable.createEntityTable( qualifiedTableName, rootDescriptor );
 	}
 
 	@Override
@@ -150,7 +164,27 @@ public class CteInsertStrategy implements SqmMultiTableInsertStrategy {
 			SqmInsertStatement<?> sqmInsertStatement,
 			DomainParameterXref domainParameterXref,
 			DomainQueryExecutionContext context) {
-		return new CteInsertHandler( entityCteTable, sqmInsertStatement, domainParameterXref, sessionFactory ).execute( context );
+
+		CteInsertHandler cteInsertHandler;
+		if(entityCteTable != null && sessionFactory != null) {
+			cteInsertHandler = new CteInsertHandler( entityCteTable, sqmInsertStatement,
+					domainParameterXref, sessionFactory );
+			return cteInsertHandler.execute( context );
+		} else {
+			cteInsertHandler = createCteInsertHandler( sqmInsertStatement, domainParameterXref, context );
+		}
+
+		return cteInsertHandler.execute( context );
+	}
+
+	private CteInsertHandler createCteInsertHandler(SqmInsertStatement<?> sqmInsertStatement, DomainParameterXref domainParameterXref, DomainQueryExecutionContext context) {
+		SqmRoot<?> root = sqmInsertStatement.getTarget();
+		EntityMappingType entityMappingType = (EntityMappingType) root.getReferencedPathSource();
+		EntityPersister entityPersister = entityMappingType.getEntityPersister();
+
+		CteTable table = createCteTable( entityPersister, dialect);
+		SessionFactoryImplementor sessionFactory = context.getSession().getFactory();
+		return new CteInsertHandler( table, sqmInsertStatement, domainParameterXref, sessionFactory );
 	}
 
 	protected EntityPersister getRootDescriptor() {
