@@ -29,6 +29,7 @@ dependencyResolutionManagement {
         }
 
         mavenCentral()
+        mavenLocal()
 
         if (System.getProperty('JPA_PREVIEW') != null) {
 			maven {
@@ -79,7 +80,7 @@ dependencyResolutionManagement {
             def byteBuddyVersion = version "byteBuddy", "1.18.8"
             def checkerFrameworkVersion = version "checkerFramework", "3.52.0"
             def geolatteVersion = version "geolatte", "1.10"
-            def hibernateModelsVersion = version "hibernateModels", "1.1.1"
+            def hibernateModelsVersion = version "hibernateModels", "1.2.0-SNAPSHOT"
             def jandexVersion = version "jandex", "3.3.2"
             def jacksonVersion = version "jackson", "2.19.4"
             def jackson3Version = version "jackson3", "3.0.3"
