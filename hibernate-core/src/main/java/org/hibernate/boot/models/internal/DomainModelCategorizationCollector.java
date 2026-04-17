@@ -6,6 +6,7 @@ package org.hibernate.boot.models.internal;
 
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
+import jakarta.persistence.IdClass;
 import org.hibernate.boot.jaxb.mapping.spi.JaxbEntityMappingsImpl;
 import org.hibernate.boot.models.spi.GlobalRegistrations;
 import org.hibernate.boot.models.xml.spi.XmlDocumentContext;
@@ -34,6 +35,7 @@ public class DomainModelCategorizationCollector {
 	private final Set<ClassDetails> entitySubclasses = new HashSet<>();
 	private final Map<String,ClassDetails> mappedSuperclasses = new HashMap<>();
 	private final Map<String,ClassDetails> embeddables = new HashMap<>();
+	private final Set<String> idClasses = new HashSet<>();
 
 	public DomainModelCategorizationCollector(
 			GlobalRegistrations globalRegistrations,
@@ -66,6 +68,10 @@ public class DomainModelCategorizationCollector {
 
 	public Map<String, ClassDetails> getEmbeddables() {
 		return embeddables;
+	}
+
+	public Set<String> getIdClasses() {
+		return idClasses;
 	}
 
 	public void apply(JaxbEntityMappingsImpl jaxbRoot, XmlDocumentContext xmlDocumentContext) {
@@ -135,9 +141,17 @@ public class DomainModelCategorizationCollector {
 			}
 		}
 
+		if ( hasIdClass( classDetails ) ) {
+			idClasses.add( classDetails.getDirectAnnotationUsage( IdClass.class ).value().getName() );
+		}
+
 		if ( isConverter( classDetails ) ) {
 			globalRegistrations.collectConverter( classDetails );
 		}
+	}
+
+	private static boolean hasIdClass(ClassDetails classDetails) {
+		return classDetails.getDirectAnnotationUsage( IdClass.class ) != null;
 	}
 
 	private static boolean isConverter(ClassDetails classDetails) {
