@@ -44,6 +44,7 @@ public class DomainModelCategorizationCollector {
 	private final Map<String,ClassDetails> embeddables = new HashMap<>();
 	private final Set<String> idClasses = new HashSet<>();
 	private final Set<ClassDetails> entityListenerClasses = new HashSet<>();
+	private final Set<String> packageNames = new HashSet<>();
 
 	public DomainModelCategorizationCollector(
 			GlobalRegistrations globalRegistrations,
@@ -92,6 +93,14 @@ public class DomainModelCategorizationCollector {
 	 */
 	public Set<ClassDetails> getEntityListenerClasses() {
 		return entityListenerClasses;
+	}
+
+	/**
+	 * Package names discovered from {@code package-info} classes encountered
+	 * during categorization.
+	 */
+	public Set<String> getPackageNames() {
+		return packageNames;
 	}
 
 	public void apply(JaxbEntityMappingsImpl jaxbRoot, XmlDocumentContext xmlDocumentContext) {
@@ -172,6 +181,11 @@ public class DomainModelCategorizationCollector {
 		if ( hasJpaLifecycleCallbackMethods( classDetails ) ) {
 			entityListenerClasses.add( classDetails );
 		}
+
+		if ( isPackageInfo( classDetails ) ) {
+			String className = classDetails.getClassName();
+			packageNames.add( className.substring( 0, className.lastIndexOf( '.' ) ) );
+		}
 	}
 
 	private static boolean hasJpaLifecycleCallbackMethods(ClassDetails classDetails) {
@@ -190,6 +204,11 @@ public class DomainModelCategorizationCollector {
 
 	private static boolean hasIdClass(ClassDetails classDetails) {
 		return classDetails.getDirectAnnotationUsage( IdClass.class ) != null;
+	}
+
+	private static boolean isPackageInfo(ClassDetails classDetails) {
+		String className = classDetails.getClassName();
+		return className != null && className.endsWith( ".package-info" );
 	}
 
 	private static boolean isConverter(ClassDetails classDetails) {
