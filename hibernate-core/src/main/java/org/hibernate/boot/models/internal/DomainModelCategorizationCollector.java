@@ -6,6 +6,9 @@ package org.hibernate.boot.models.internal;
 
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
+import jakarta.persistence.Embeddable;
+import jakarta.persistence.Embedded;
+import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.IdClass;
 import jakarta.persistence.PostLoad;
 import jakarta.persistence.PostPersist;
@@ -14,11 +17,15 @@ import jakarta.persistence.PostUpdate;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreRemove;
 import jakarta.persistence.PreUpdate;
+import org.hibernate.AnnotationException;
+import org.hibernate.annotations.CompositeType;
 import org.hibernate.boot.jaxb.mapping.spi.JaxbEntityMappingsImpl;
 import org.hibernate.boot.models.spi.GlobalRegistrations;
 import org.hibernate.boot.models.xml.spi.XmlDocumentContext;
 import org.hibernate.models.spi.ClassDetails;
+import org.hibernate.models.spi.MemberDetails;
 import org.hibernate.models.spi.ModelsContext;
+import org.hibernate.models.spi.TypeDetails;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -215,6 +222,64 @@ public class DomainModelCategorizationCollector {
 		return classDetails.getClassName() != null && !classDetails.isInterface()
 			&& ( classDetails.isImplementor( AttributeConverter.class )
 				|| classDetails.getDirectAnnotationUsage( Converter.class ) != null );
+	}
+
+	/**
+	 * Validates that fields and methods annotated with {@code @Embedded} or {@code @EmbeddedId}
+	 * reference types annotated with {@code @Embeddable}.
+	 * <p>
+	 * This check is not part of the normal categorization flow because Hibernate ORM tolerates
+	 * {@code @Embedded} on types without {@code @Embeddable} (e.g. composite id classes, interface
+	 * types with {@code @TargetEmbeddable}, etc.). Environments that require strict validation
+	 * — such as Quarkus, where all classes must be in the Jandex index at build time — can call
+	 * this method explicitly to catch missing {@code @Embeddable} annotations early.
+	 * <p>
+	 * Skips members that use {@code @CompositeType}, have unresolved generic type variables,
+	 * or whose type is {@code null} (erased method return types).
+	 *
+	 * @param classDetails the class to validate
+	 * @throws org.hibernate.AnnotationException if a member's type is missing {@code @Embeddable}
+	 */
+	public static void validateEmbeddedFields(ClassDetails classDetails) {
+		classDetails.forEachField( (index, fieldDetails) -> validateEmbeddedMember( fieldDetails, classDetails ) );
+		classDetails.forEachMethod( (index, methodDetails) -> validateEmbeddedMember( methodDetails, classDetails ) );
+	}
+
+	private static void validateEmbeddedMember(MemberDetails memberDetails, ClassDetails declaringClass) {
+		if ( !memberDetails.isPersistable() ) {
+			return;
+		}
+
+		if ( !memberDetails.hasDirectAnnotationUsage( Embedded.class )
+				&& !memberDetails.hasDirectAnnotationUsage( EmbeddedId.class ) ) {
+			return;
+		}
+
+		if ( memberDetails.hasDirectAnnotationUsage( CompositeType.class ) ) {
+			return;
+		}
+
+		final TypeDetails type = memberDetails.getType();
+		if ( type == null ) {
+			return;
+		}
+
+		if ( type.getTypeKind() == TypeDetails.Kind.TYPE_VARIABLE
+				|| type.getTypeKind() == TypeDetails.Kind.TYPE_VARIABLE_REFERENCE
+				|| type.getTypeKind() == TypeDetails.Kind.WILDCARD_TYPE ) {
+			return;
+		}
+
+		final ClassDetails fieldTypeClass = type.determineRawClass();
+		if ( fieldTypeClass != null && !fieldTypeClass.hasDirectAnnotationUsage( Embeddable.class ) ) {
+			throw new AnnotationException( String.format(
+					"Type '%s' must be annotated with @Embeddable, because it is used as an embeddable."
+							+ " This type is used in class '%s' for attribute '%s'.",
+					fieldTypeClass.getName(),
+					declaringClass.getName(),
+					memberDetails.resolveAttributeName()
+			) );
+		}
 	}
 
 	public static boolean isRootEntity(ClassDetails classInfo) {
