@@ -22,11 +22,13 @@ import org.hibernate.annotations.CompositeType;
 import org.hibernate.boot.jaxb.mapping.spi.JaxbEntityMappingsImpl;
 import org.hibernate.boot.models.spi.GlobalRegistrations;
 import org.hibernate.boot.models.xml.spi.XmlDocumentContext;
+import org.hibernate.models.spi.AnnotationTarget;
 import org.hibernate.models.spi.ClassDetails;
 import org.hibernate.models.spi.MemberDetails;
 import org.hibernate.models.spi.ModelsContext;
 import org.hibernate.models.spi.TypeDetails;
 
+import java.lang.annotation.Annotation;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -198,7 +200,7 @@ public class DomainModelCategorizationCollector {
 	private static boolean hasJpaLifecycleCallbackMethods(ClassDetails classDetails) {
 		final boolean[] found = { false };
 		classDetails.forEachMethod( (index, methodDetails) -> {
-			if ( !found[0] && methodDetails.hasAnyDirectAnnotationUsage(
+			if ( !found[0] && hasAnyDirectAnnotationUsage( methodDetails,
 					PrePersist.class, PostPersist.class,
 					PreRemove.class, PostRemove.class,
 					PreUpdate.class, PostUpdate.class,
@@ -207,6 +209,16 @@ public class DomainModelCategorizationCollector {
 			}
 		} );
 		return found[0];
+	}
+
+	@SafeVarargs
+	private static boolean hasAnyDirectAnnotationUsage(AnnotationTarget target, Class<? extends Annotation>... types) {
+		for ( Class<? extends Annotation> type : types ) {
+			if ( target.hasDirectAnnotationUsage( type ) ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private static boolean hasIdClass(ClassDetails classDetails) {
