@@ -54,6 +54,8 @@ public class DomainModelCategorizationCollector {
 	private final Set<String> idClasses = new HashSet<>();
 	private final Set<ClassDetails> entityListenerClasses = new HashSet<>();
 	private final Set<String> packageNames = new HashSet<>();
+	private final Set<String> enumTypes = new HashSet<>();
+	private final Set<String> javaTypes = new HashSet<>();
 
 	public DomainModelCategorizationCollector(
 			GlobalRegistrations globalRegistrations,
@@ -112,6 +114,23 @@ public class DomainModelCategorizationCollector {
 		return packageNames;
 	}
 
+	/**
+	 * Enum types discovered as field types on entities, mapped superclasses,
+	 * and embeddables. These need reflection registration for native image builds.
+	 */
+	public Set<String> getEnumTypes() {
+		return enumTypes;
+	}
+
+	/**
+	 * Types from the {@code java.*} package discovered in the class hierarchy
+	 * (superclasses and interfaces) of entities, mapped superclasses, and embeddables.
+	 * These need reflection registration for native image builds.
+	 */
+	public Set<String> getJavaTypes() {
+		return javaTypes;
+	}
+
 	public void apply(JaxbEntityMappingsImpl jaxbRoot, XmlDocumentContext xmlDocumentContext) {
 		globalRegistrations.collectJavaTypeRegistrations( jaxbRoot.getJavaTypeRegistrations() );
 		globalRegistrations.collectJdbcTypeRegistrations( jaxbRoot.getJdbcTypeRegistrations() );
@@ -164,6 +183,8 @@ public class DomainModelCategorizationCollector {
 			if ( classDetails.getClassName() != null ) {
 				mappedSuperclasses.put( classDetails.getClassName(), classDetails );
 			}
+			collectFieldEnumTypes( classDetails );
+			collectClassHierarchyJavaTypes( classDetails );
 		}
 		else if ( isEntity( classDetails ) ) {
 			if ( isRootEntity( classDetails ) ) {
@@ -172,11 +193,15 @@ public class DomainModelCategorizationCollector {
 			else {
 				entitySubclasses.add( classDetails );
 			}
+			collectFieldEnumTypes( classDetails );
+			collectClassHierarchyJavaTypes( classDetails );
 		}
 		else if ( isEmbeddable( classDetails ) ) {
 			if ( classDetails.getClassName() != null ) {
 				embeddables.put( classDetails.getClassName(), classDetails );
 			}
+			collectFieldEnumTypes( classDetails );
+			collectClassHierarchyJavaTypes( classDetails );
 		}
 
 		if ( hasIdClass( classDetails ) ) {
@@ -291,6 +316,44 @@ public class DomainModelCategorizationCollector {
 					declaringClass.getName(),
 					memberDetails.resolveAttributeName()
 			) );
+		}
+	}
+
+	private void collectFieldEnumTypes(ClassDetails classDetails) {
+		classDetails.forEachField( (index, fieldDetails) -> {
+			final TypeDetails type = fieldDetails.getType();
+			if ( type == null || type.getTypeKind() != TypeDetails.Kind.CLASS ) {
+				return;
+			}
+			final ClassDetails fieldTypeClass = type.determineRawClass();
+			if ( fieldTypeClass != null && fieldTypeClass.isEnum() ) {
+				enumTypes.add( fieldTypeClass.getClassName() );
+			}
+		} );
+	}
+
+	private void collectClassHierarchyJavaTypes(ClassDetails classDetails) {
+		collectClassHierarchyJavaTypes( classDetails, new HashSet<>() );
+	}
+
+	private void collectClassHierarchyJavaTypes(ClassDetails classDetails, Set<String> visited) {
+		if ( classDetails == null ) {
+			return;
+		}
+		final String className = classDetails.getClassName();
+		if ( className == null || !visited.add( className ) ) {
+			return;
+		}
+		if ( "java.lang.Object".equals( className ) ) {
+			return;
+		}
+		if ( className.startsWith( "java." ) ) {
+			javaTypes.add( className );
+			return;
+		}
+		collectClassHierarchyJavaTypes( classDetails.getSuperClass(), visited );
+		for ( TypeDetails iface : classDetails.getImplementedInterfaces() ) {
+			collectClassHierarchyJavaTypes( iface.determineRawClass(), visited );
 		}
 	}
 
