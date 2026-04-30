@@ -29,6 +29,7 @@ dependencyResolutionManagement {
         }
 
         mavenCentral()
+        mavenLocal()
 
         if (System.getProperty('JPA_PREVIEW') != null) {
 			maven {
