@@ -4,23 +4,18 @@
  */
 package org.hibernate.boot.jaxb.hbm.transform;
 
-import java.io.Serializable;
 import java.util.List;
 import java.util.Locale;
 
 import org.hibernate.boot.jaxb.hbm.spi.EntityInfo;
-import org.hibernate.boot.jaxb.hbm.spi.JaxbHbmCompositeAttributeType;
 import org.hibernate.boot.jaxb.hbm.spi.JaxbHbmDiscriminatorSubclassEntityType;
 import org.hibernate.boot.jaxb.hbm.spi.JaxbHbmHibernateMapping;
 import org.hibernate.boot.jaxb.hbm.spi.JaxbHbmJoinedSubclassEntityType;
 import org.hibernate.boot.jaxb.hbm.spi.JaxbHbmRootEntityType;
 import org.hibernate.boot.jaxb.hbm.spi.JaxbHbmUnionSubclassEntityType;
-import org.hibernate.boot.jaxb.mapping.spi.JaxbEmbeddableImpl;
 import org.hibernate.boot.jaxb.mapping.spi.JaxbEntityImpl;
 import org.hibernate.boot.jaxb.mapping.spi.JaxbEntityMappingsImpl;
 import org.hibernate.boot.jaxb.spi.Binding;
-
-import static org.hibernate.internal.util.StringHelper.isNotEmpty;
 
 import static org.hibernate.internal.util.collections.CollectionHelper.arrayList;
 
@@ -107,27 +102,7 @@ public class XmlPreprocessor {
 		transformationState.getHbmEntityByName().put( entityName, hbmEntity );
 		transformationState.getMappingEntityByName().put( entityName, mappingEntity );
 
-		preProcessComponentAttributes( hbmEntity, mappingRoot );
-	}
-
-	private static void preProcessComponentAttributes(EntityInfo hbmEntity, JaxbEntityMappingsImpl mappingRoot) {
-		if ( hbmEntity instanceof JaxbHbmRootEntityType rootEntity ) {
-			collectComponentTypes( rootEntity.getAttributes(), mappingRoot );
-		}
-	}
-
-	private static void collectComponentTypes(List<Serializable> attributes, JaxbEntityMappingsImpl mappingRoot) {
-		for ( Object attribute : attributes ) {
-			if ( attribute instanceof JaxbHbmCompositeAttributeType compositeAttribute ) {
-				final String className = compositeAttribute.getClazz();
-				if ( isNotEmpty( className ) ) {
-					final var embeddable = new JaxbEmbeddableImpl();
-					embeddable.setClazz( className );
-					mappingRoot.getEmbeddables().add( embeddable );
-				}
-				collectComponentTypes( compositeAttribute.getAttributes(), mappingRoot );
-			}
-		}
+		// todo (7.0) : walk attributes looking for components
 	}
 
 	private static void preProcessSubclass(
