@@ -1321,7 +1321,13 @@ public class HbmXmlTransformer {
 							hbmComponent,
 							componentTypeInfo
 					);
-					attributes.getEmbeddedAttributes().add( componentHandler.transformEmbedded( jaxbEmbeddable, hbmComponent ) );
+					final var embedded = componentHandler.transformEmbedded( jaxbEmbeddable, hbmComponent );
+					transferAccess(
+							hbmComponent.getAccess(),
+							embedded::setAccess,
+							embedded::setAttributeAccessor
+					);
+					attributes.getEmbeddedAttributes().add( embedded );
 				}
 				catch (Exception e) {
 					throw new TransformationException( "Error transforming <component/> : " + hbmComponent.getName(), e, origin() );
@@ -2591,7 +2597,7 @@ public class HbmXmlTransformer {
 		}
 
 		final String role = bootEntityInfo.getPersistentClass().getEntityName() + "." + hbmCompositeId.getName();
-		final String embeddableName = embeddableClassName != null ? embeddableClassName : hbmCompositeId.getName();
+		final String embeddableName = componentHandler.determineEmbeddableName( embeddableClassName, hbmCompositeId.getName() );
 		final var componentTypeInfo = transformationState.getEmbeddableInfoByRole().get( role );
 		final var created = transferEmbeddedIdEmbeddable(
 				role,
@@ -3118,7 +3124,13 @@ public class HbmXmlTransformer {
 							hbmComponent,
 							componentTypeInfo
 					);
-					mappingEntity.getAttributes().getEmbeddedAttributes().add( componentHandler.transformEmbedded( jaxbEmbeddable, hbmComponent ) );
+					final var embedded = componentHandler.transformEmbedded( jaxbEmbeddable, hbmComponent );
+					transferAccess(
+							hbmComponent.getAccess(),
+							embedded::setAccess,
+							embedded::setAttributeAccessor
+					);
+					mappingEntity.getAttributes().getEmbeddedAttributes().add( embedded );
 				}
 				else if ( hbmProperty instanceof JaxbHbmManyToOneType hbmManyToOne ) {
 					final var propertyInfo = bootEntityInfo.propertyInfoMap().get( hbmManyToOne.getName() );
