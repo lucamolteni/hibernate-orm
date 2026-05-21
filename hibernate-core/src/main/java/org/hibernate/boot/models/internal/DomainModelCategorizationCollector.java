@@ -347,7 +347,7 @@ public class DomainModelCategorizationCollector {
 		if ( "java.lang.Object".equals( className ) ) {
 			return;
 		}
-		if ( className.startsWith( "java." ) ) {
+		if ( !isEntity( classDetails ) && !isEmbeddable( classDetails ) ) {
 			javaTypes.add( className );
 			return;
 		}
